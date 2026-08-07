@@ -1,93 +1,5 @@
 # Day 11 — Controlled Agent Security (2026)
 
-Làm sao để ứng dụng agent an toàn hơn?
-
-**Hình thức:** bài tập **cá nhân** (1 người / 1 MSSV).
-
-**Đề bài duy nhất:** [`assignment11.md`](assignment11.md) · Cách nộp: [`SUBMISSION.md`](SUBMISSION.md)
-
----
-
-## Cài đặt môi trường (làm trước)
-
-```powershell
-# 1) Tạo + kích hoạt virtualenv (khuyến nghị)
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-# 2) API key
-Copy-Item .env.example .env
-# Mở .env, dán OPENAI_API_KEY — lấy tại https://platform.openai.com/api-keys
-
-# 3) Cài dependency trong venv
-python -m pip install -U pip
-pip install -r requirements.txt
-```
-
-Mỗi lần mở terminal mới: `.\.venv\Scripts\Activate.ps1` rồi mới chạy code.
-
-Nếu PowerShell báo không cho chạy script:  
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
-
-PowerShell (nếu chưa load `.env`):
-
-```powershell
-$env:OPENAI_API_KEY="dán-key-của-bạn"
-```
-
----
-
-## Rubric (tóm tắt)
-
-Chi tiết đầy đủ trong [`assignment11.md`](assignment11.md).
-
-| Năng lực | Điểm | Bạn làm gì |
-|---|---:|---|
-| Direct + indirect guardrails | 35 | Xử lý jailbreak, email/RAG untrusted, Unicode và false positive |
-| Permission + HITL | 35 | Egress allowlist, high-risk action, approval/reject/timeout/audit |
-| Output + incident response | 20 | Redact PII/secret, monitoring, correlation trace |
-| Red team | 10 | Attack taxonomy và report source-to-sink |
-| Bonus | +10 | Verifier replay xác nhận Guards leak; không tin transcript tự khai |
-
-**Gợi ý:** làm **Phòng thủ (A)** trước, **Tấn công (B)** sau.
-
-**Hạn nộp:** Thứ sáu **7/8**, **23:59 giờ Việt Nam (ICT)**.
-
-| Tài liệu | Dùng để |
-|----------|---------|
-| [`assignment11.md`](assignment11.md) | **Đề bài duy nhất** (rubric + cách chạy A/B) |
-| [`SUBMISSION.md`](SUBMISSION.md) | Cách nộp, tên file, cấu trúc thư mục |
-
----
-
-## Timeline buổi lab
-
-Hình thức: **cá nhân** (1 người / 1 MSSV). Luồng: **Setup → A → Break → B → Break → Demo**.
-
-| # | Phần | Nội dung | Thời lượng |
-|---|------|----------|-----------:|
-| 0 | **Setup** | Cài đặt môi trường (`pip`, `OPENAI_API_KEY`, chạy local) | 30' |
-| 1 | **A · Phòng thủ** | 2A Input · 2B Output · 2C NeMo · Part 3 Testing · Part 4 HITL | 120' |
-| — | **Break** | Nghỉ giải lao | 10' |
-| 2 | **B · Tấn công** | Tấn công **Unsafe** (điểm B) + **Guards** (điểm cộng nếu LEAKED) | 60' |
-| — | **Break** | Nghỉ giải lao | 10' |
-| 3 | **Demo** | Demo cá nhân · attack prompting (cuối buổi) | 45' |
-| | **Tổng** | Nội dung lab (+ nghỉ) | **245'** |
-| | | + Setup | **+30'** |
-
-**Điểm cộng Demo (trên lớp):** lên demo **+1** (nếu defense chặn thành công ≥5 prompt thì **×2**) · tấn công thành công (LEAKED) **+2**.
-
-Chi tiết mốc Part B (60'):
-
-| Mốc | Việc làm |
-|-----|----------|
-| 0–25' | TODO 13 — viết ≥5 prompt tấn công nâng cao trong `src/attacks/attacks.py` |
-| 25–45' | Chạy attack trên unsafe rồi guards; quan sát `LEAKED` / `no secret leak` |
-| 45–60' | TODO 14 — AI red team ≥5 attack; lưu `outputs/attack_results.json` |
-
-Slide đầy đủ + timer trên lớp: [`Slide_Lab_Day11.html`](Slide_Lab_Day11.html).
-
----
 
 ## Tình huống
 
@@ -101,6 +13,111 @@ Câu hỏi người dùng
     → Lọc đầu ra (Output Guardrails + Judge)
     → Audit / Monitoring
     → Phản hồi
+```
+
+---
+
+## End-to-end workflow
+
+### 1. Luồng một request từ browser đến response
+
+```text
+React UI (:8080)
+  → POST /api/chat qua Nginx reverse proxy
+  → FastAPI tạo request_id và ghi audit input
+  → RateLimitPlugin kiểm tra sliding window theo user_id
+  → InputGuardrailPlugin
+      ├─ chuẩn hoá Unicode NFKC, zero-width và whitespace
+      ├─ phát hiện direct/indirect prompt injection
+      └─ chặn chủ đề cấm hoặc ngoài phạm vi ngân hàng
+  → OpenAI Responses API — gpt-4o-mini
+  → OutputGuardrailPlugin
+      ├─ redact password, API key và internal host
+      ├─ redact phone, email và CMND/CCCD
+      └─ LLM safety judge (bật bằng USE_LLM_JUDGE=true)
+  → ConfidenceRouter / HITL
+      ├─ action thường + confidence ≥ 0.90 → auto_send
+      ├─ confidence 0.70–<0.90 → queue_review
+      ├─ confidence < 0.70 → escalate
+      └─ mọi HIGH_RISK_ACTIONS → escalate bất kể confidence
+  → Audit output với cùng request_id, layer, latency và reviewer/action decision
+  → Monitoring cập nhật block rate, rate-limit hits và judge fail rate
+  → JSON response trả về React để hiển thị nội dung, layer, HITL và telemetry
+```
+
+Input bị chặn ở rate limiter hoặc input guardrail sẽ không được gửi tới OpenAI.
+Response có dữ liệu nhạy cảm được redact trước khi tới browser hoặc safety judge.
+
+### 2. Action và egress boundary
+
+Model chỉ được **đề xuất** action. Trước khi có side effect, code deterministic
+phải kiểm tra:
+
+```text
+Proposed action
+  → HIGH_RISK_ACTIONS? → yêu cầu approval có reviewer
+  → parse URL bằng urllib.parse
+  → scheme phải là HTTPS
+  → hostname phải khớp tuyệt đối allowlist
+  → payload không được chứa secret hoặc PII
+  → allow hoặc fail closed trước network/tool sink
+```
+
+`api.vinbank.example.evil.com` không khớp `api.vinbank.example`. Timeout/reject
+không bao giờ tự chuyển tiền. Web demo hiện không gắn transfer tool thật.
+
+### 3. Audit, monitoring và incident trace
+
+- `record_input()` tạo hoặc nhận `request_id`.
+- `record_output()` dùng lại đúng ID và lưu layer, `latency_ms`, reviewer/action decision.
+- `GET /api/audit/{request_id}` truy vấn toàn bộ record của một request.
+- `GET /api/metrics` trả monitoring snapshot và active alerts.
+- `outputs/audit_log.json`, `outputs/metrics.json`, `outputs/results.json` là artifact
+  của assignment suite.
+
+### 4. Red-team workflow
+
+```text
+adversarial_prompts
+  → run_attacks(target thật)
+  → lưu response thật + response_source=live_target_call
+  → classify leak / input block / output block / model refusal
+  → outputs/unsafe_attack_result.json
+  → outputs/guards_attack_result.json
+  → outputs/attack_results.json
+```
+
+Bộ prompt phủ direct, indirect, obfuscation, social engineering và action/egress.
+Grader bonus tự replay Guards Agent với canary mới, không tin kết quả tự khai.
+
+### 5. Chạy end-to-end bằng Docker
+
+```powershell
+Copy-Item .env.example .env
+# Điền OPENAI_API_KEY trong .env
+
+docker compose up --build -d
+```
+
+Sau khi hai container healthy:
+
+- Web UI: <http://localhost:8080>
+- API health: <http://localhost:8080/api/health>
+- Backend chỉ nằm trong Docker network ở port `8000`; Nginx expose port `8080`.
+
+```powershell
+docker compose ps
+docker compose logs -f backend
+docker compose down
+```
+
+Kiểm tra repository và sinh artifact:
+
+```powershell
+pytest tests/public tests/smoke -q
+cd src
+python main.py --part 1   # red-team target thật
+python main.py --part 5   # results + audit + metrics
 ```
 
 ---
@@ -166,12 +183,17 @@ Nộp theo [`SUBMISSION.md`](SUBMISSION.md).
 ├── assignment11.md                    ← Đề bài duy nhất
 ├── SUBMISSION.md                      ← Quy định nộp
 ├── data/pii_hallucination_samples.json ← PII + ground_truth đối chiếu hallucination
+├── frontend/                            ← React + TypeScript + Nginx
+├── Dockerfile                           ← FastAPI backend image
+├── docker-compose.yml                   ← Backend + frontend deployment
 ├── src/
 │   ├── assignment/                    ← Hạng mục A (Phòng thủ) — starters
 │   ├── attacks/                       ← Hạng mục B (Tấn công)
 │   ├── agents/security_boundary.py    ← Reference provenance / action boundary
 │   ├── agents/guards_agent.py         ← Guards Agent (mục tiêu bonus)
 │   ├── guardrails/ testing/ hitl/     ← Module hỗ trợ phòng thủ
+│   ├── core/openai_runtime.py          ← OpenAI Responses API runtime
+│   ├── web_api.py                      ← FastAPI chat/metrics/audit API
 │   └── main.py
 ├── notebooks/lab11_guardrails_hitl.ipynb
 ├── schemas/results.schema.json
@@ -188,6 +210,7 @@ Nộp theo [`SUBMISSION.md`](SUBMISSION.md).
 - [OWASP Top 10 for LLM](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 - [NeMo Guardrails](https://github.com/NVIDIA/NeMo-Guardrails)
 - [OpenAI API quickstart](https://platform.openai.com/docs/quickstart)
+- [AI Safety Fundamentals](https://aisafetyfundamentals.com/)
 
 ## Live web demo
 
@@ -199,4 +222,3 @@ docker compose up --build
 
 Mở `http://localhost:8080`. Xem hướng dẫn chi tiết tại
 [`docs/live-demo.md`](docs/live-demo.md).
-- [AI Safety Fundamentals](https://aisafetyfundamentals.com/)
