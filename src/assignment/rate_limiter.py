@@ -9,11 +9,10 @@ from __future__ import annotations
 from collections import defaultdict, deque
 import time
 
-from google.adk.plugins import base_plugin
-from google.genai import types
+from core.openai_runtime import BasePlugin, Content, Part
 
 
-class RateLimitPlugin(base_plugin.BasePlugin):
+class RateLimitPlugin(BasePlugin):
     """Block users who exceed max_requests within window_seconds."""
 
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
@@ -24,10 +23,10 @@ class RateLimitPlugin(base_plugin.BasePlugin):
         self.blocked_count = 0
         self.total_count = 0
 
-    def _block_response(self, message: str) -> types.Content:
-        return types.Content(
+    def _block_response(self, message: str) -> Content:
+        return Content(
             role="model",
-            parts=[types.Part.from_text(text=message)],
+            parts=[Part.from_text(text=message)],
         )
 
     async def on_user_message_callback(self, *, invocation_context, user_message):

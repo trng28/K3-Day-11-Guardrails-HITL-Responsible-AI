@@ -7,11 +7,14 @@ Lab 11 — Part 2B: Output Guardrails
 import re
 import textwrap
 
-from google.genai import types
-from google.adk.agents import llm_agent
-from google.adk import runners
-from google.adk.plugins import base_plugin
-
+from core.openai_runtime import (
+    DEFAULT_MODEL,
+    BasePlugin,
+    Content,
+    OpenAIAgent,
+    OpenAIRunner,
+    Part,
+)
 from core.utils import chat_with_agent
 
 
@@ -95,15 +98,11 @@ Respond with ONLY one word: SAFE or UNSAFE
 If UNSAFE, add a brief reason on the next line.
 """
 
-# TODO: Create safety_judge_agent using LlmAgent
-# Hint:
-# safety_judge_agent = llm_agent.LlmAgent(
-#     model="gemini-2.0-flash",
-#     name="safety_judge",
-#     instruction=SAFETY_JUDGE_INSTRUCTION,
-# )
-
-safety_judge_agent = None  # TODO: Replace with implementation
+safety_judge_agent = OpenAIAgent(
+    model=DEFAULT_MODEL,
+    name="safety_judge",
+    instructions=SAFETY_JUDGE_INSTRUCTION,
+)
 judge_runner = None
 
 
@@ -111,7 +110,7 @@ def _init_judge():
     """Initialize the judge agent and runner (call after creating the agent)."""
     global judge_runner
     if safety_judge_agent is not None:
-        judge_runner = runners.InMemoryRunner(
+        judge_runner = OpenAIRunner(
             agent=safety_judge_agent, app_name="safety_judge"
         )
 
@@ -142,11 +141,11 @@ async def llm_safety_check(response_text: str) -> dict:
 # Combines content_filter() and llm_safety_check().
 #
 # NOTE: after_model_callback uses keyword-only arguments.
-#   - llm_response has a .content attribute (types.Content)
+#   - llm_response has a .content attribute (Content)
 #   - Return the (possibly modified) llm_response, or None to keep original
 # ============================================================
 
-class OutputGuardrailPlugin(base_plugin.BasePlugin):
+class OutputGuardrailPlugin(BasePlugin):
     """Plugin that checks agent output before sending to user."""
 
     def __init__(self, use_llm_judge=True):
@@ -183,9 +182,9 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         if not filtered["safe"]:
             self.redacted_count += 1
             text_for_judge = filtered["redacted"]
-            llm_response.content = types.Content(
+            llm_response.content = Content(
                 role="model",
-                parts=[types.Part.from_text(text=filtered["redacted"])],
+                parts=[Part.from_text(text=filtered["redacted"])],
             )
 
         # Never send the original sensitive text to another model. The judge
@@ -194,9 +193,9 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
             judgement = await llm_safety_check(text_for_judge)
             if not judgement["safe"]:
                 self.blocked_count += 1
-                llm_response.content = types.Content(
+                llm_response.content = Content(
                     role="model",
-                    parts=[types.Part.from_text(
+                    parts=[Part.from_text(
                         text=(
                             "I cannot provide that response safely. "
                             "Please ask another VinBank banking question."

@@ -2,7 +2,7 @@
 Assignment 11 — Defense-in-depth pipeline assembly (TODO).
 
 Wire rate limiter + lab guardrails + judge + audit + monitoring.
-You may use Google ADK plugins, LangGraph, NeMo, or pure Python.
+The repository uses OpenAI Responses API with provider-neutral local callbacks.
 """
 from __future__ import annotations
 
@@ -85,8 +85,8 @@ def build_production_plugins(
 
 
 def build_observability():
-    """TODO: return (AuditLogPlugin(), MonitoringAlert())."""
-    raise NotImplementedError("Implement build_observability")
+    """Create the audit and monitoring observers used by the pipeline."""
+    return AuditLogPlugin(), MonitoringAlert()
 
 
 async def run_assignment_suite(pipeline, student_id: str) -> dict:

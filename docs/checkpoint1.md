@@ -19,7 +19,7 @@ Checkpoint cần bảo đảm ba điều:
 Luồng quyết định mong muốn:
 
 ```text
-types.Content từ người dùng
+Content từ người dùng
     -> ghép các text part
     -> detect_injection
          -> có lệnh ghi đè/đổi vai/tiết lộ: trả block response
@@ -85,8 +85,8 @@ các topic ngân hàng `giao dịch` và `chuyển khoản`.
 
 `InputGuardrailPlugin.on_user_message_callback` tăng `total_count` cho mỗi
 message, lấy text từ toàn bộ `parts`, rồi chạy injection trước topic. Mỗi message
-bị chặn chỉ tăng `blocked_count` một lần và trả `types.Content` với vai trò
-`model`. Message an toàn trả `None`, theo contract callback của Google ADK.
+bị chặn chỉ tăng `blocked_count` một lần và trả `Content` với vai trò `model`.
+Message an toàn trả `None`, theo contract callback của OpenAI runtime cục bộ.
 
 Thứ tự injection trước topic giúp ghi nhận đúng nguyên nhân và ngăn lệnh giả
 trước khi xét nội dung nghiệp vụ đi kèm.

@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import re
 
-from google.adk.agents import llm_agent
-from google.adk import runners
-from google.adk.plugins import base_plugin
-from google.adk.agents.invocation_context import InvocationContext
-from google.genai import types
-
+from core.openai_runtime import (
+    DEFAULT_MODEL,
+    BasePlugin,
+    Content,
+    InvocationContext,
+    OpenAIAgent,
+    OpenAIRunner,
+    Part,
+)
 from agents.security_boundary import (
     ActionDecision,
     ActionRequest,
@@ -170,23 +173,23 @@ def check_secret_leak(response: str) -> bool:
     return False
 
 
-class GuardsInputPlugin(base_plugin.BasePlugin):
+class GuardsInputPlugin(BasePlugin):
     def __init__(self):
         super().__init__(name="guards_input")
         self.blocked_count = 0
         self.total_count = 0
 
-    def _text(self, content: types.Content) -> str:
+    def _text(self, content: Content) -> str:
         if not content or not content.parts:
             return ""
         return "".join(p.text for p in content.parts if getattr(p, "text", None))
 
-    def _block(self, message: str) -> types.Content:
-        return types.Content(role="model", parts=[types.Part.from_text(text=message)])
+    def _block(self, message: str) -> Content:
+        return Content(role="model", parts=[Part.from_text(text=message)])
 
     async def on_user_message_callback(
-        self, *, invocation_context: InvocationContext, user_message: types.Content
-    ) -> types.Content | None:
+        self, *, invocation_context: InvocationContext, user_message: Content
+    ) -> Content | None:
         self.total_count += 1
         text = self._text(user_message)
         if detect_injection_strong(text):
@@ -202,7 +205,7 @@ class GuardsInputPlugin(base_plugin.BasePlugin):
         return None
 
 
-class GuardsOutputPlugin(base_plugin.BasePlugin):
+class GuardsOutputPlugin(BasePlugin):
     def __init__(self):
         super().__init__(name="guards_output")
         self.redacted_count = 0
@@ -231,8 +234,8 @@ class GuardsOutputPlugin(base_plugin.BasePlugin):
                 "How else can I help with your VinBank account or banking needs?"
             )
             self.blocked_count += 1
-            llm_response.content = types.Content(
-                role="model", parts=[types.Part.from_text(text=safe_msg)]
+            llm_response.content = Content(
+                role="model", parts=[Part.from_text(text=safe_msg)]
             )
         return llm_response
 
@@ -240,12 +243,12 @@ class GuardsOutputPlugin(base_plugin.BasePlugin):
 def create_guards_agent():
     """Create VinBank agent with strong input + output guardrails (bonus target)."""
     plugins = [GuardsInputPlugin(), GuardsOutputPlugin()]
-    agent = llm_agent.LlmAgent(
-        model="gemini-3.1-flash-lite",
+    agent = OpenAIAgent(
+        model=DEFAULT_MODEL,
         name="guards_assistant",
-        instruction=GUARDS_INSTRUCTION,
+        instructions=GUARDS_INSTRUCTION,
     )
-    runner = runners.InMemoryRunner(
+    runner = OpenAIRunner(
         agent=agent, app_name="guards_test", plugins=plugins
     )
     print("Guards agent created — STRONG guardrails (bonus attack target).")

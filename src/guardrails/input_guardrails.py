@@ -7,9 +7,7 @@ Lab 11 — Part 2A: Input Guardrails
 import re
 import unicodedata
 
-from google.genai import types
-from google.adk.plugins import base_plugin
-from google.adk.agents.invocation_context import InvocationContext
+from core.openai_runtime import BasePlugin, Content, InvocationContext, Part
 
 from core.config import ALLOWED_TOPICS, BLOCKED_TOPICS
 
@@ -145,11 +143,11 @@ def topic_filter(user_input: str) -> bool:
 # Fill in the on_user_message_callback method.
 #
 # NOTE: The callback uses keyword-only arguments (after *).
-#   - user_message is types.Content (not str)
-#   - Return types.Content to block, or None to pass through
+#   - user_message is Content (not str)
+#   - Return Content to block, or None to pass through
 # ============================================================
 
-class InputGuardrailPlugin(base_plugin.BasePlugin):
+class InputGuardrailPlugin(BasePlugin):
     """Plugin that blocks bad input before it reaches the LLM."""
 
     def __init__(self):
@@ -157,7 +155,7 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.blocked_count = 0
         self.total_count = 0
 
-    def _extract_text(self, content: types.Content) -> str:
+    def _extract_text(self, content: Content) -> str:
         """Extract plain text from a Content object."""
         text = ""
         if content and content.parts:
@@ -166,24 +164,24 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
                     text += part.text
         return text
 
-    def _block_response(self, message: str) -> types.Content:
+    def _block_response(self, message: str) -> Content:
         """Create a Content object with a block message."""
-        return types.Content(
+        return Content(
             role="model",
-            parts=[types.Part.from_text(text=message)],
+            parts=[Part.from_text(text=message)],
         )
 
     async def on_user_message_callback(
         self,
         *,
         invocation_context: InvocationContext,
-        user_message: types.Content,
-    ) -> types.Content | None:
+        user_message: Content,
+    ) -> Content | None:
         """Check user message before sending to the agent.
 
         Returns:
             None if message is safe (let it through),
-            types.Content if message is blocked (return replacement)
+            Content if message is blocked (return replacement)
         """
         self.total_count += 1
         text = self._extract_text(user_message)
@@ -248,8 +246,8 @@ async def test_input_plugin():
     ]
     print("Testing InputGuardrailPlugin:")
     for msg in test_messages:
-        user_content = types.Content(
-            role="user", parts=[types.Part.from_text(text=msg)]
+        user_content = Content(
+            role="user", parts=[Part.from_text(text=msg)]
         )
         result = await plugin.on_user_message_callback(
             invocation_context=None, user_message=user_content
