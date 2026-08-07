@@ -1,5 +1,5 @@
 """
-Assignment 11 — Audit Log starter (TODO).
+Assignment 11 — Correlated audit log.
 
 Records every interaction for forensics. Never blocks by itself —
 other layers catch attacks; this layer makes them reviewable.
