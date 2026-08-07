@@ -4,6 +4,10 @@
   <img src="./assets/Pi7_Gif.gif" alt="VinBank Guardrails live demo" width="100%" />
 </p>
 
+<p align="center">
+  <img src="./assets/image.png" alt="VinBank Guardrails interface" width="100%" />
+</p>
+
 ## Tình huống
 
 Chatbot ngân hàng **VinBank**. Agent “unsafe” cố ý chứa mật khẩu / API key trong system prompt.
