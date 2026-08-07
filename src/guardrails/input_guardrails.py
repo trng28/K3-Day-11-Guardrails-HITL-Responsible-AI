@@ -5,6 +5,7 @@ Lab 11 — Part 2A: Input Guardrails
   TODO 3: Input Guardrail Plugin (ADK)
 """
 import re
+import unicodedata
 
 from google.genai import types
 from google.adk.plugins import base_plugin
@@ -32,6 +33,29 @@ from core.config import ALLOWED_TOPICS, BLOCKED_TOPICS
 # Regex is one signal, not the whole security boundary.
 # ============================================================
 
+def _normalize_text(text: str) -> str:
+    """Return a stable representation suitable for security comparisons.
+
+    NFKC folds compatibility characters (for example full-width Latin text),
+    format characters remove common zero-width obfuscation, and whitespace is
+    collapsed so line breaks or repeated spaces cannot split a phrase.
+    """
+    if not isinstance(text, str):
+        return ""
+
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = "".join(
+        char for char in normalized if unicodedata.category(char) != "Cf"
+    )
+    return re.sub(r"\s+", " ", normalized).strip().lower()
+
+
+def _ascii_fold(text: str) -> str:
+    """Remove accents for matching Vietnamese configured in ASCII form."""
+    decomposed = unicodedata.normalize("NFKD", text).replace("đ", "d")
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
+
+
 def detect_injection(user_input: str) -> bool:
     """Detect prompt injection patterns in user input.
 
@@ -41,15 +65,45 @@ def detect_injection(user_input: str) -> bool:
     Returns:
         True if injection detected, False otherwise
     """
-    INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
+    normalized = _normalize_text(user_input)
+    if not normalized:
+        return False
+
+    injection_patterns = [
+        r"\bignore\s+(?:all\s+)?(?:previous|above|prior)\s+(?:instructions?|rules?|directives?)\b",
+        r"\bdisregard\s+(?:all\s+)?(?:previous|above|prior)\s+(?:instructions?|rules?|directives?)\b",
+        r"\b(?:forget|override)\s+(?:your\s+|the\s+)?(?:system\s+)?(?:instructions?|rules?|prompt)\b",
+        r"\byou\s+are\s+now\b",
+        r"\bpretend\s+(?:that\s+)?you\s+are\b|\bpretend\s+to\s+be\b",
+        r"\bact\s+as\s+(?:a\s+|an\s+)?(?:unrestricted|jailbroken|unfiltered)\b",
+        r"\b(?:reveal|show|print|repeat|translate)\s+(?:me\s+)?(?:your\s+|the\s+)?(?:system\s+)?(?:instructions?|prompt|password|secrets?|api\s+key)\b",
+        r"\bsystem\s+prompt\b",
+        r"\b(?:jailbreak|developer\s+mode|dan\s+mode)\b",
     ]
 
-    for pattern in INJECTION_PATTERNS:
-        if re.search(pattern, user_input, re.IGNORECASE):
+    for pattern in injection_patterns:
+        if re.search(pattern, normalized):
             return True
+
+    # A second, structural signal catches whitespace-obfuscated command words
+    # without treating ordinary mentions of email/RAG as hostile.
+    compact = re.sub(r"[^\w]", "", _ascii_fold(normalized))
+    override_verbs = ("ignore", "disregard", "override", "boqua", "quen")
+    authority_targets = (
+        "previousinstructions", "priorinstructions", "aboveinstructions",
+        "systemprompt", "huongdantruoc", "moihuongdan",
+    )
+    if any(verb in compact for verb in override_verbs) and any(
+        target in compact for target in authority_targets
+    ):
+        return True
+
+    disclosure_verbs = ("reveal", "show", "print", "repeat", "tietlo", "choxem")
+    protected_targets = ("systemprompt", "internalpassword", "apikey", "matkhau")
+    if any(verb in compact for verb in disclosure_verbs) and any(
+        target in compact for target in protected_targets
+    ):
+        return True
     return False
 
 
@@ -72,14 +126,16 @@ def topic_filter(user_input: str) -> bool:
     Returns:
         True if input should be BLOCKED (off-topic or blocked topic)
     """
-    input_lower = user_input.lower()
+    normalized = _normalize_text(user_input)
+    comparable = _ascii_fold(normalized)
 
-    # TODO: Implement logic:
-    # 1. If input contains any blocked topic -> return True
-    # 2. If input doesn't contain any allowed topic -> return True
-    # 3. Otherwise -> return False (allow)
+    # Blocked topics take precedence, even when banking words are also present.
+    if any(_ascii_fold(_normalize_text(topic)) in comparable for topic in BLOCKED_TOPICS):
+        return True
 
-    pass  # Replace with your implementation
+    return not any(
+        _ascii_fold(_normalize_text(topic)) in comparable for topic in ALLOWED_TOPICS
+    )
 
 
 # ============================================================
@@ -132,14 +188,20 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         self.total_count += 1
         text = self._extract_text(user_message)
 
-        # TODO: Implement logic:
-        # 1. Call detect_injection(text)
-        #    - If True: increment blocked_count, return self._block_response("...")
-        # 2. Call topic_filter(text)
-        #    - If True: increment blocked_count, return self._block_response("...")
-        # 3. If both are False: return None (let message through)
+        if detect_injection(text):
+            self.blocked_count += 1
+            return self._block_response(
+                "I cannot follow instructions embedded in untrusted content. "
+                "I can still help summarize legitimate banking information."
+            )
 
-        pass  # Replace with your implementation
+        if topic_filter(text):
+            self.blocked_count += 1
+            return self._block_response(
+                "I'm a VinBank assistant and can only help with banking-related questions."
+            )
+
+        return None
 
 
 # ============================================================
