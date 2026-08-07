@@ -1,7 +1,9 @@
 """
 Lab 11 — Helper Utilities
 """
-async def chat_with_agent(agent, runner, user_message: str, session_id=None):
+async def chat_with_agent(
+    agent, runner, user_message: str, session_id=None, user_id: str = "student"
+):
     """Send a message to the agent and get the response.
 
     Args:
@@ -13,4 +15,8 @@ async def chat_with_agent(agent, runner, user_message: str, session_id=None):
     Returns:
         Tuple of (response_text, session)
     """
-    return await runner.run(user_message, session_id=session_id)
+    return await runner.run(
+        user_message,
+        session_id=session_id,
+        user_id=user_id,
+    )

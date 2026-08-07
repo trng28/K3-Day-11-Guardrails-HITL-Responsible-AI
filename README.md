@@ -188,4 +188,15 @@ Nộp theo [`SUBMISSION.md`](SUBMISSION.md).
 - [OWASP Top 10 for LLM](https://owasp.org/www-project-top-10-for-large-language-model-applications/)
 - [NeMo Guardrails](https://github.com/NVIDIA/NeMo-Guardrails)
 - [OpenAI API quickstart](https://platform.openai.com/docs/quickstart)
+
+## Live web demo
+
+Repository có giao diện React + TypeScript và FastAPI backend. Chạy bằng Docker:
+
+```powershell
+docker compose up --build
+```
+
+Mở `http://localhost:8080`. Xem hướng dẫn chi tiết tại
+[`docs/live-demo.md`](docs/live-demo.md).
 - [AI Safety Fundamentals](https://aisafetyfundamentals.com/)

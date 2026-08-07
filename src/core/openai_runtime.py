@@ -75,9 +75,15 @@ class OpenAIRunner:
     def content_text(content: Content) -> str:
         return "".join(part.text or "" for part in content.parts)
 
-    async def run(self, user_message: str, *, session_id: str | None = None):
+    async def run(
+        self,
+        user_message: str,
+        *,
+        session_id: str | None = None,
+        user_id: str = "student",
+    ):
         session = self.get_or_create_session(session_id)
-        context = InvocationContext(user_id="student", session_id=session.id)
+        context = InvocationContext(user_id=user_id, session_id=session.id)
         content = Content(role="user", parts=[Part.from_text(text=user_message)])
 
         for plugin in self.plugins:
