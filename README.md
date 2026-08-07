@@ -1,5 +1,9 @@
 # Day 11 — Controlled Agent Security (2026)
 
+**Họ tên:** Nguyễn Mai Thanh Trúc
+**MSSV:** 2A202601473
+**Báo cáo:** [`report/2A202601473_report.md`](report/2A202601473_report.md)
+
 <p align="center">
   <img src="./assets/demo.gif" alt="VinBank Guardrails live demo" width="100%" />
 </p>
