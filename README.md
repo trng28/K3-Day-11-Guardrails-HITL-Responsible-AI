@@ -1,7 +1,7 @@
 # Day 11 — Controlled Agent Security (2026)
 
 <p align="center">
-  <img src="./assets/Pi7_Gif.gif" alt="VinBank Guardrails live demo" width="100%" />
+  <img src="./assets/demo.gif" alt="VinBank Guardrails live demo" width="100%" />
 </p>
 
 <p align="center">
