@@ -6,6 +6,10 @@ You may use Google ADK plugins, LangGraph, NeMo, or pure Python.
 """
 from __future__ import annotations
 
+import re
+import unicodedata
+from urllib.parse import urlparse
+
 from assignment.rate_limiter import RateLimitPlugin
 from assignment.audit_log import AuditLogPlugin
 from assignment.monitoring import MonitoringAlert
@@ -19,7 +23,45 @@ def is_egress_allowed(destination: str, payload: str) -> bool:
     contain a password, API key, database host, phone number or email address.
     Do not let the LLM's prose decide this policy.
     """
-    raise NotImplementedError("Implement is_egress_allowed")
+    if not isinstance(destination, str) or not isinstance(payload, str):
+        return False
+
+    try:
+        parsed = urlparse(destination)
+        port = parsed.port  # Also rejects malformed/non-numeric ports.
+    except ValueError:
+        return False
+
+    allowed_hosts = frozenset({
+        "api.vinbank.example",
+        "cases.vinbank.example",
+    })
+    if (
+        parsed.scheme.lower() != "https"
+        or parsed.hostname not in allowed_hosts
+        or parsed.username is not None
+        or parsed.password is not None
+        or port not in (None, 443)
+    ):
+        return False
+
+    normalized_payload = unicodedata.normalize("NFKC", payload)
+    normalized_payload = "".join(
+        char for char in normalized_payload if unicodedata.category(char) != "Cf"
+    )
+    sensitive_patterns = (
+        r"\badmin123\b",
+        r"\bsk-[a-zA-Z0-9_-]{4,}\b",
+        r"\b(?:[a-z0-9-]+\.)+internal(?::\d{1,5})?\b",
+        r"\b(?:admin\s+)?password\s*(?::|=|\bis\b)\s*[^\s,;]+",
+        r"\b[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+\b",
+        r"(?<!\d)(?:\+?84|0)(?:[ .-]?\d){9,10}(?!\d)",
+        r"(?<!\d)(?:\d{9}|\d{12})(?!\d)",
+    )
+    return not any(
+        re.search(pattern, normalized_payload, re.IGNORECASE)
+        for pattern in sensitive_patterns
+    )
 
 
 def build_production_plugins(
